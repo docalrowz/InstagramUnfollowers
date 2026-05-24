@@ -344,30 +344,6 @@ export const Searching = ({
                   )}
                 </div>
                 <div className="flex align-center gap-small">
-                  <button
-                    className={`whitelist-star-button ${state.currentTab === "whitelisted" ? "active" : ""}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      let whitelistedResults: readonly UserNode[] = [];
-                      if (state.whitelistedResults.some(r => r.id === user.id)) {
-                        // Remove from whitelist
-                        whitelistedResults = state.whitelistedResults.filter(r => r.id !== user.id);
-                      } else {
-                        // Add to whitelist
-                        whitelistedResults = [...state.whitelistedResults, user];
-                      }
-
-                      localStorage.setItem(
-                        WHITELISTED_RESULTS_STORAGE_KEY,
-                        JSON.stringify(whitelistedResults),
-                      );
-                      setState({ ...state, whitelistedResults });
-                    }}
-                    title={state.whitelistedResults.some(r => r.id === user.id) ? "Remove from whitelist" : "Add to whitelist"}
-                  >
-                    ★
-                  </button>
                   <input
                     className="account-checkbox"
                     type="checkbox"
