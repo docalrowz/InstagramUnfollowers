@@ -317,9 +317,6 @@ export const Searching = ({
                       alt={user.username}
                       src={user.profile_pic_url}
                     />
-                    <div className="avatar-preview">
-                      <img src={user.profile_pic_url.replace("s150x150/", "s320x320/")} alt={user.username} />
-                    </div>
                     <span className="avatar-icon-overlay-container">
                       {state.currentTab === "non_whitelisted" ? (
                         <UserCheckIcon />
@@ -360,7 +357,7 @@ export const Searching = ({
                         // Add to whitelist
                         whitelistedResults = [...state.whitelistedResults, user];
                       }
-                      
+
                       localStorage.setItem(
                         WHITELISTED_RESULTS_STORAGE_KEY,
                         JSON.stringify(whitelistedResults),

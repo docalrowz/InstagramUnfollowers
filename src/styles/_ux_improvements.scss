@@ -36,7 +36,7 @@
 /* Profile Preview Hover */
 .avatar-container {
   position: relative;
-  
+
   &::after {
     content: '';
     position: absolute;
@@ -53,34 +53,6 @@
     box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
   }
 
-  /* Large Preview Tooltip */
-  .avatar-preview {
-    visibility: hidden;
-    position: absolute;
-    left: 60px;
-    top: -50px;
-    z-index: 1000;
-    opacity: 0;
-    transform: scale(0.8);
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    pointer-events: none;
-    
-    img {
-      width: 150px;
-      height: 150px;
-      border-radius: 12px;
-      border: 3px solid #fff;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      background: #262626;
-    }
-  }
-
-  &:hover .avatar-preview {
-    visibility: visible;
-    opacity: 1;
-    transform: scale(1);
-    top: -60px;
-  }
 }
 
 .iu .copy-list[title] {

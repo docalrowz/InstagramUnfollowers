@@ -18,7 +18,7 @@ html {
         @include helpers.main-layout;
         display: flex;
         flex-direction: column;
-        
+
         .overlay {
             color: variables.$clr-white;
         }
@@ -141,7 +141,7 @@ html {
                     font-size: 0.8rem;
                     margin: 0;
                     cursor: pointer;
-                    
+
                     input {
                         margin: 0;
                     }
@@ -1681,11 +1681,6 @@ html .iu button.run-scan:hover {
 
 .iu .avatar-container::after {
     border-radius: 8px;
-}
-
-.iu .avatar-container .avatar-preview img {
-    border-radius: 8px;
-    border-color: var(--amber);
 }
 
 .iu .results-container .result-item a.fs-xlarge {
