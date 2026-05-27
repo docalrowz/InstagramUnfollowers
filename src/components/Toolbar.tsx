@@ -36,9 +36,9 @@ export const Toolbar = ({
   return (
     <header className="app-header">
       {isActiveProcess && (
-        <div 
-          className="progressbar" 
-          style={{ '--progress-width': `${state.status !== 'initial' ? state.percentage : 0}%` } as React.CSSProperties}
+        <div
+          className="progressbar"
+          style={{ '--progress-width': `${(state.status === 'scanning' || state.status === 'unfollowing') ? state.percentage : 0}%` } as React.CSSProperties}
         />
       )}
       <div className="app-header-content">
@@ -58,6 +58,7 @@ export const Toolbar = ({
 
               case "scanning":
               case "unfollowing":
+              case "error":
                 setState({
                   status: "initial",
                 });
@@ -87,12 +88,13 @@ export const Toolbar = ({
                   );
                 case "initial":
                 case "unfollowing":
+                case "error":
                   return;
                 default:
                   assertUnreachable(state);
               }
             }}
-            disabled={state.status === "initial"}
+            disabled={state.status === "initial" || state.status === "error"}
           >
             Copy
           </button>
@@ -129,11 +131,12 @@ export const Toolbar = ({
             type="text"
             className="search-bar"
             placeholder="Search users"
-            disabled={state.status === "initial"}
-            value={state.status === "initial" ? "" : state.searchTerm}
+            disabled={state.status === "initial" || state.status === "error"}
+            value={(state.status === "scanning" || state.status === "unfollowing") ? state.searchTerm : ""}
             onChange={e => {
               switch (state.status) {
                 case "initial":
+                case "error":
                   return;
                 case "scanning":
                   return setState({

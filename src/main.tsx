@@ -2,7 +2,7 @@ import React, { ChangeEvent, useEffect, useState } from "react";
 import { render } from "react-dom";
 import "./styles.scss";
 
-import { Typename, User, UserNode } from "./model/user";
+import { Typename, UserNode } from "./model/user";
 import { Toast } from "./components/Toast";
 import { UserCheckIcon } from "./components/icons/UserCheckIcon";
 import { UserUncheckIcon } from "./components/icons/UserUncheckIcon";
@@ -12,17 +12,25 @@ import { DEFAULT_TIME_BETWEEN_SEARCH_CYCLES,
   DEFAULT_TIME_TO_WAIT_AFTER_FIVE_UNFOLLOWS, INSTAGRAM_HOSTNAME } from "./constants/constants";
 import {
   assertUnreachable,
-  getCookie,
   getCurrentPageUnfollowers,
-  getUsersForDisplay, sleep, unfollowUserUrlGenerator, urlGenerator,
+  getUsersForDisplay, sleep,
 } from "./utils/utils";
 import { NotSearching } from "./components/NotSearching";
-import { State } from "./model/state";
+import { State, isErrorRecoverable } from "./model/state";
 import { Searching } from "./components/Searching";
 import { Toolbar } from "./components/Toolbar";
 import { Unfollowing } from "./components/Unfollowing";
 import { Timings } from "./model/timings";
 import { loadWhitelist, saveWhitelist, loadTimings, saveTimings } from "./utils/whitelist-manager";
+import { fetchFollowingPage, unfollowUser } from "./core/instagram-api";
+import {
+  InstagramError,
+  isCriticalError,
+  isFatalError,
+  isInstagramErrorException,
+} from "./core/error-types";
+import { AdaptiveRateLimiter } from "./core/rate-limiter";
+import { CircuitBreaker, CircuitOpenError } from "./core/circuit-breaker";
 
 const LOCAL_PREVIEW_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const isLocalPreview = LOCAL_PREVIEW_HOSTS.has(location.hostname);
@@ -82,6 +90,108 @@ function pauseScan() {
   scanningPaused = !scanningPaused;
 }
 
+type ToastState = { readonly show: false } | { readonly show: true; readonly text: string };
+
+/**
+ * Routes an exception caught inside the scan or unfollow loop into the
+ * adaptive limiter, the breaker, and (when fatal) the new `error`
+ * state variant. Returns `"halt"` if the caller must stop the loop,
+ * `"retry"` if the caller should continue (typically after the helper
+ * has already waited for the limiter to back off).
+ */
+async function handleApiError(
+  e: unknown,
+  limiter: AdaptiveRateLimiter,
+  breaker: CircuitBreaker,
+  previousStatus: 'scanning' | 'unfollowing',
+  setState: React.Dispatch<React.SetStateAction<State>>,
+  setToast: React.Dispatch<React.SetStateAction<ToastState>>,
+): Promise<'halt' | 'retry'> {
+  if (e instanceof CircuitOpenError) {
+    setState({
+      status: 'error',
+      error: { kind: 'rate_limit' },
+      recoverable: false,
+      previousStatus,
+    });
+    setToast({ show: false });
+    return 'halt';
+  }
+  if (!isInstagramErrorException(e)) {
+    console.error(e);
+    return 'retry';
+  }
+  const err: InstagramError = e.error;
+  if (isCriticalError(err)) {
+    breaker.recordCriticalError();
+  }
+  if (err.kind === 'rate_limit') {
+    limiter.onRateLimit(err.retryAfter);
+    setToast({
+      show: true,
+      text: `Rate limited. Backing off to ${Math.round(limiter.getCurrentDelay() / 1000)}s.`,
+    });
+  }
+  if (isFatalError(err) || breaker.isOpen() || !isErrorRecoverable(err)) {
+    setState({
+      status: 'error',
+      error: err,
+      recoverable: isErrorRecoverable(err) && !breaker.isOpen(),
+      previousStatus,
+    });
+    setToast({ show: false });
+    return 'halt';
+  }
+  await limiter.wait();
+  return 'retry';
+}
+
+interface ErrorScreenProps {
+  readonly error: InstagramError;
+  readonly recoverable: boolean;
+  readonly onReset: () => void;
+}
+
+function ErrorScreen({ error, recoverable, onReset }: ErrorScreenProps) {
+  const title = errorTitle(error);
+  const detail = errorDetail(error);
+  return (
+    <section className="error-screen" role="alert">
+      <h2>{title}</h2>
+      <p>{detail}</p>
+      {recoverable
+        ? <p>You can safely try again in a few moments.</p>
+        : <p>Reload the page and verify your account on Instagram before retrying.</p>}
+      <button type="button" onClick={onReset}>Back to start</button>
+    </section>
+  );
+}
+
+function errorTitle(error: InstagramError): string {
+  switch (error.kind) {
+    case 'checkpoint':   return 'Instagram requires you to verify this account';
+    case 'rate_limit':   return 'Rate-limited by Instagram';
+    case 'csrf_expired': return 'Your Instagram session expired';
+    case 'network':      return 'Network error';
+    case 'unknown':      return 'Unexpected response from Instagram';
+  }
+}
+
+function errorDetail(error: InstagramError): string {
+  switch (error.kind) {
+    case 'checkpoint':
+      return 'The scan was stopped to avoid making things worse. Open Instagram in a normal tab, resolve the checkpoint, then come back.';
+    case 'rate_limit':
+      return 'Too many requests have been made. The circuit breaker tripped to protect your account.';
+    case 'csrf_expired':
+      return 'Instagram rotated your session token. Refresh the page and log back in.';
+    case 'network':
+      return 'Could not reach Instagram. Check your connection and try again.';
+    case 'unknown':
+      return `Status ${error.status}. See the developer console for the raw response.`;
+  }
+}
+
 
 function App() {
   const [state, setState] = useState<State>({
@@ -131,6 +241,7 @@ function App() {
   let isActiveProcess: boolean;
   switch (state.status) {
     case "initial":
+    case "error":
       isActiveProcess = false;
       break;
     case "scanning":
@@ -332,65 +443,70 @@ function App() {
       if (state.status !== "scanning" || isLocalPreview) {
         return;
       }
-      const results = [...state.results];
+      const limiter = new AdaptiveRateLimiter({
+        baseDelay: timings.timeBetweenSearchCycles,
+        jitterRatio: 0.2,
+      });
+      const breaker = new CircuitBreaker();
+      const results: UserNode[] = [...state.results];
       let scrollCycle = 0;
-      let url = urlGenerator();
+      let cursor: string | undefined;
       let hasNext = true;
       let currentFollowedUsersCount = 0;
       let totalFollowedUsersCount = -1;
 
       while (hasNext) {
-        let receivedData: User;
         try {
-          receivedData = (await fetch(url).then(res => res.json())).data.user.edge_follow;
+          breaker.ensureClosed();
+          const page = await fetchFollowingPage(cursor);
+          limiter.onSuccess();
+          breaker.recordSuccess();
+
+          if (totalFollowedUsersCount === -1) {
+            totalFollowedUsersCount = page.totalCount;
+          }
+          hasNext = page.hasNext;
+          cursor = page.endCursor;
+          currentFollowedUsersCount += page.users.length;
+          page.users.forEach(u => results.push(u));
+
+          setState(prevState => {
+            if (prevState.status !== "scanning") {
+              return prevState;
+            }
+            // Math.round (not Math.floor) so progress can reach exactly 100%.
+            return {
+              ...prevState,
+              percentage: Math.round((currentFollowedUsersCount / totalFollowedUsersCount) * 100),
+              results,
+            };
+          });
         } catch (e) {
-          console.error(e);
+          const handled = await handleApiError(e, limiter, breaker, "scanning", setState, setToast);
+          if (handled === "halt") {
+            return;
+          }
           continue;
         }
 
-        if (totalFollowedUsersCount === -1) {
-          totalFollowedUsersCount = receivedData.count;
-        }
-
-        hasNext = receivedData.page_info.has_next_page;
-        url = urlGenerator(receivedData.page_info.end_cursor);
-        currentFollowedUsersCount += receivedData.edges.length;
-        receivedData.edges.forEach(x => results.push(x.node));
-
-        setState(prevState => {
-          if (prevState.status !== "scanning") {
-            return prevState;
-          }
-          const newState: State = {
-            ...prevState,
-            // Fix: Changed from Math.floor to Math.round to ensure progress reaches 100%
-            // Math.floor would leave progress at 99% when near completion
-            percentage: Math.round((currentFollowedUsersCount / totalFollowedUsersCount) * 100),
-            results,
-          };
-          return newState;
-        });
-
-        // Pause scanning if user requested so.
         while (scanningPaused) {
           await sleep(1000);
           console.info("Scan paused");
         }
 
-        // Human-like behavior: Micro-pause between fetching chunks
-        const microPause = Math.floor(Math.random() * 1500) + 500; // 500ms - 2000ms
+        // Human-like micro-pause between fetches; layered on top of the
+        // adaptive limiter's own jittered delay below.
+        const microPause = Math.floor(Math.random() * 1500) + 500;
         await sleep(microPause);
 
-        // Standard delay between cycles
-        await sleep(Math.floor(Math.random() * (timings.timeBetweenSearchCycles - timings.timeBetweenSearchCycles * 0.7)) + timings.timeBetweenSearchCycles);
-        
+        await limiter.wait();
+
         scrollCycle++;
         if (scrollCycle > 6) {
           scrollCycle = 0;
-          // Variable long sleep to avoid patterns
           const longSleepVar = Math.max(
             0,
-            timings.timeToWaitAfterFiveSearchCycles + (Math.random() * 10000 - 5000), // +/- 5 seconds
+            timings.timeToWaitAfterFiveSearchCycles + (Math.random() * 10000 - 5000),
           );
           setToast({ show: true, text: `Sleeping ${Math.round(longSleepVar / 1000)} seconds to prevent getting temp blocked` });
           await sleep(longSleepVar);
@@ -409,68 +525,51 @@ function App() {
       if (state.status !== "unfollowing" || isLocalPreview) {
         return;
       }
-
-      const csrftoken = getCookie("csrftoken");
-      if (csrftoken === null) {
-        throw new Error("csrftoken cookie is null");
-      }
+      const limiter = new AdaptiveRateLimiter({
+        baseDelay: timings.timeBetweenUnfollows,
+        jitterRatio: 0.2,
+      });
+      const breaker = new CircuitBreaker();
 
       let counter = 0;
       for (const user of state.selectedResults) {
         counter += 1;
-        // Fix: Changed from Math.floor to Math.round to ensure progress reaches 100%
-        // Math.floor would leave progress at 99% when near completion
+        // Math.round (not Math.floor) so progress can reach exactly 100%.
         const percentage = Math.round((counter / state.selectedResults.length) * 100);
+
+        let success: boolean;
         try {
-          await fetch(unfollowUserUrlGenerator(user.id), {
-            headers: {
-              "content-type": "application/x-www-form-urlencoded",
-              "x-csrftoken": csrftoken,
-            },
-            method: "POST",
-            mode: "cors",
-            credentials: "include",
-          });
-          setState(prevState => {
-            if (prevState.status !== "unfollowing") {
-              return prevState;
-            }
-            return {
-              ...prevState,
-              percentage,
-              unfollowLog: [
-                ...prevState.unfollowLog,
-                {
-                  user,
-                  unfollowedSuccessfully: true,
-                },
-              ],
-            };
-          });
+          breaker.ensureClosed();
+          await unfollowUser(user.id);
+          limiter.onSuccess();
+          breaker.recordSuccess();
+          success = true;
         } catch (e) {
-          console.error(e);
-          setState(prevState => {
-            if (prevState.status !== "unfollowing") {
-              return prevState;
-            }
-            return {
-              ...prevState,
-              percentage,
-              unfollowLog: [
-                ...prevState.unfollowLog,
-                {
-                  user,
-                  unfollowedSuccessfully: false,
-                },
-              ],
-            };
-          });
+          const handled = await handleApiError(e, limiter, breaker, "unfollowing", setState, setToast);
+          if (handled === "halt") {
+            return;
+          }
+          success = false;
         }
-        // If unfollowing the last user in the list, no reason to wait.
+
+        setState(prevState => {
+          if (prevState.status !== "unfollowing") {
+            return prevState;
+          }
+          return {
+            ...prevState,
+            percentage,
+            unfollowLog: [
+              ...prevState.unfollowLog,
+              { user, unfollowedSuccessfully: success },
+            ],
+          };
+        });
+
         if (user === state.selectedResults[state.selectedResults.length - 1]) {
           break;
         }
-        await sleep(Math.floor(Math.random() * (timings.timeBetweenUnfollows * 1.2 - timings.timeBetweenUnfollows)) + timings.timeBetweenUnfollows);
+        await limiter.wait();
 
         if (counter % 5 === 0) {
           setToast({ show: true, text: `Sleeping ${timings.timeToWaitAfterFiveUnfollows / 60000 } minutes to prevent getting temp blocked` });
@@ -509,6 +608,16 @@ function App() {
         state={state}
         handleUnfollowFilter={handleUnfollowFilter}
       ></Unfollowing>;
+      break;
+
+    case "error":
+      markup = (
+        <ErrorScreen
+          error={state.error}
+          recoverable={state.recoverable}
+          onReset={() => setState({ status: "initial" })}
+        />
+      );
       break;
 
     default:

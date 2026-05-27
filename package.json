@@ -4,7 +4,9 @@
     "build-dev": "npm run build && webpack serve --mode development",
     "build-prod": "npm run webpack-build && webpack serve --mode production",
     "update-readme": "node scripts/update-index.js public/index.html dist/dist.js",
-    "build": "npm run webpack-build && npm run update-readme"
+    "build": "npm run webpack-build && npm run update-readme",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "babel": {
     "plugins": [
@@ -21,11 +23,13 @@
     "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^4.6.2",
+    "happy-dom": "^14.12.3",
     "sass": "^1.83.4",
     "sass-loader": "^13.3.3",
     "style-loader": "^3.3.4",
     "ts-loader": "^9.5.2",
     "typescript": "^5.7.3",
+    "vitest": "^1.6.1",
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.2.0"
