@@ -6,7 +6,9 @@
     "update-readme": "node scripts/update-index.js public/index.html dist/dist.js",
     "build": "npm run webpack-build && npm run update-readme",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.{ts,tsx}\""
   },
   "babel": {
     "plugins": [
