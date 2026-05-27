@@ -1,8 +1,10 @@
 import React from "react";
-import { assertUnreachable, getCurrentPageUnfollowers, getMaxPage, getUsersForDisplay, isWithoutProfilePicture } from "../utils/utils";
+import { assertUnreachable } from "../utils/utils";
+import { getCurrentPageUnfollowers, getMaxPage, getUsersForDisplay, isWithoutProfilePicture } from "../state/selectors";
 import { State } from "../model/state";
 import { UserNode } from "../model/user";
 import { WHITELISTED_RESULTS_STORAGE_KEY } from "../constants/constants";
+import { useAlert, useConfirm } from "./ui/ConfirmDialog";
 
 
 export interface SearchingProps {
@@ -26,6 +28,9 @@ export const Searching = ({
   UserCheckIcon,
   UserUncheckIcon,
 }: SearchingProps) => {
+  const askConfirm = useConfirm();
+  const askAlert = useAlert();
+
   if (state.status !== "scanning") {
     return null;
   }
@@ -212,31 +217,31 @@ export const Searching = ({
         <button
           className="unfollow"
           onClick={() => {
-            if (!confirm("Are you sure?")) {
-              return;
-            }
-            //TODO TEMP until types are properly fixed
-            // @ts-ignore
-            setState(prevState => {
-              if (prevState.status !== "scanning") {
-                return prevState;
+            void (async () => {
+              if (state.selectedResults.length === 0) {
+                await askAlert("Must select at least a single user to unfollow.");
+                return;
               }
-              if (prevState.selectedResults.length === 0) {
-                alert("Must select at least a single user to unfollow");
-                return prevState;
+              const ok = await askConfirm({
+                title: 'Start unfollowing?',
+                message: `You are about to unfollow ${state.selectedResults.length} users. This cannot be undone.`,
+                confirmLabel: 'Unfollow',
+              });
+              if (!ok) {
+                return;
               }
-              const newState: State = {
-                ...prevState,
+              setState({
                 status: "unfollowing",
+                searchTerm: state.searchTerm,
                 percentage: 0,
+                selectedResults: state.selectedResults,
                 unfollowLog: [],
                 filter: {
                   showSucceeded: true,
                   showFailed: true,
                 },
-              };
-              return newState;
-            });
+              });
+            })();
           }}
         >
           Unfollow ({state.selectedResults.length})

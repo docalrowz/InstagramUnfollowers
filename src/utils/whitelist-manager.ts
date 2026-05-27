@@ -3,25 +3,25 @@ import { Timings } from "../model/timings";
 import { WHITELISTED_RESULTS_STORAGE_KEY, TIMINGS_STORAGE_KEY } from "../constants/constants";
 
 /**
- * Export whitelist to a JSON file
+ * Export whitelist to a JSON file. No-op when the list is empty —
+ * caller is responsible for guarding the UI.
  */
 export const exportWhitelist = (whitelistedUsers: readonly UserNode[]): void => {
   if (whitelistedUsers.length === 0) {
-    alert("No users in whitelist to export");
     return;
   }
 
   const dataStr = JSON.stringify(whitelistedUsers, null, 2);
   const dataBlob = new Blob([dataStr], { type: "application/json" });
   const url = URL.createObjectURL(dataBlob);
-  
+
   const link = document.createElement("a");
   link.href = url;
   link.download = `instagram-whitelist-${new Date().toISOString().split('T')[0]}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  
+
   URL.revokeObjectURL(url);
 };
 
@@ -73,13 +73,10 @@ export const importWhitelist = (
 };
 
 /**
- * Clear all whitelist data
+ * Clear all whitelist data. Pure side-effect — caller must obtain
+ * user confirmation (e.g. via useConfirm) before invoking.
  */
 export const clearWhitelist = (): void => {
-  if (!confirm("Are you sure you want to clear the entire whitelist? This action cannot be undone.")) {
-    return;
-  }
-  
   localStorage.removeItem(WHITELISTED_RESULTS_STORAGE_KEY);
 };
 

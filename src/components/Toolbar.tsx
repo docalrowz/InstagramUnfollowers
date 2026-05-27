@@ -1,11 +1,13 @@
 import React, { ChangeEvent, useState } from "react";
 import { State } from "../model/state";
-import { assertUnreachable, copyListToClipboard, exportToCSV, exportToJSON, getCurrentPageUnfollowers, getUsersForDisplay } from "../utils/utils";
+import { assertUnreachable, copyListToClipboard, exportToCSV, exportToJSON } from "../utils/utils";
+import { getCurrentPageUnfollowers, getUsersForDisplay } from "../state/selectors";
 import { SettingMenu } from "./SettingMenu";
 import { SettingIcon } from "./icons/SettingIcon";
 import { Timings } from "../model/timings";
 import { Logo } from "./icons/Logo";
 import { UserNode } from "../model/user";
+import { useAlert, useConfirm } from "./ui/ConfirmDialog";
 
 interface ToolBarProps {
   isActiveProcess: boolean;
@@ -32,6 +34,8 @@ export const Toolbar = ({
 }: ToolBarProps) => {
 
   const [setingMenu, setSettingMenu] = useState(false);
+  const askConfirm = useConfirm();
+  const askAlert = useAlert();
 
   return (
     <header className="app-header">
@@ -49,20 +53,20 @@ export const Toolbar = ({
               // Avoid resetting state while active process.
               return;
             }
-            switch (state.status) {
-              case "initial":
-                if (confirm("Go back to Instagram?")) {
-                  location.reload();
-                }
-                break;
+            void (async () => {
+              switch (state.status) {
+                case "initial":
+                  if (await askConfirm("Go back to Instagram?")) {
+                    location.reload();
+                  }
+                  break;
 
-              case "scanning":
-              case "unfollowing":
-              case "error":
-                setState({
-                  status: "initial",
-                });
-            }
+                case "scanning":
+                case "unfollowing":
+                case "error":
+                  setState({ status: "initial" });
+              }
+            })();
           }}
         >
           <Logo />
@@ -75,24 +79,28 @@ export const Toolbar = ({
           <button
             className="copy-list"
             onClick={() => {
-              switch (state.status) {
-                case "scanning":
-                  return copyListToClipboard(
-                    getUsersForDisplay(
-                      state.results,
-                      state.whitelistedResults,
-                      state.currentTab,
-                      state.searchTerm,
-                      state.filter,
-                    ),
-                  );
-                case "initial":
-                case "unfollowing":
-                case "error":
-                  return;
-                default:
-                  assertUnreachable(state);
-              }
+              void (async () => {
+                switch (state.status) {
+                  case "scanning":
+                    await copyListToClipboard(
+                      getUsersForDisplay(
+                        state.results,
+                        state.whitelistedResults,
+                        state.currentTab,
+                        state.searchTerm,
+                        state.filter,
+                      ),
+                    );
+                    await askAlert("List copied to clipboard.");
+                    return;
+                  case "initial":
+                  case "unfollowing":
+                  case "error":
+                    return;
+                  default:
+                    assertUnreachable(state);
+                }
+              })();
             }}
             disabled={state.status === "initial" || state.status === "error"}
           >

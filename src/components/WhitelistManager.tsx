@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { UserNode } from "../model/user";
 import { exportWhitelist, importWhitelist, clearWhitelist, mergeWhitelists } from "../utils/whitelist-manager";
+import { useConfirm } from "./ui/ConfirmDialog";
 
 interface WhitelistManagerProps {
   whitelistedUsers: readonly UserNode[];
@@ -8,6 +9,7 @@ interface WhitelistManagerProps {
 }
 
 export const WhitelistManager = ({ whitelistedUsers, onWhitelistUpdate }: WhitelistManagerProps) => {
+  const askConfirm = useConfirm();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMode, setImportMode] = useState<"replace" | "merge">("merge");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -59,7 +61,15 @@ export const WhitelistManager = ({ whitelistedUsers, onWhitelistUpdate }: Whitel
     event.currentTarget.value = "";
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
+    const ok = await askConfirm({
+      title: 'Clear whitelist?',
+      message: 'This will remove every user from your whitelist. This action cannot be undone.',
+      confirmLabel: 'Clear',
+    });
+    if (!ok) {
+      return;
+    }
     clearWhitelist();
     onWhitelistUpdate([]);
     setMessage({ type: "success", text: "Whitelist cleared successfully" });
