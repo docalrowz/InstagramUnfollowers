@@ -83,11 +83,48 @@ const _getPreviewUsers = (): readonly UserNode[] => [
   _createPreviewUser("12", "lowlight.club", "Owen Voss", { isPrivate: true }),
 ];
 
-// pause
-let scanningPaused = false;
+interface ErrorScreenProps {
+  readonly error: InstagramError;
+  readonly recoverable: boolean;
+  readonly onReset: () => void;
+}
 
-function pauseScan() {
-  scanningPaused = !scanningPaused;
+function ErrorScreen({ error, recoverable, onReset }: ErrorScreenProps) {
+  return (
+    <section className="error-screen" role="alert">
+      <h2>{errorTitle(error)}</h2>
+      <p>{errorDetail(error)}</p>
+      {recoverable
+        ? <p>You can safely try again in a few moments.</p>
+        : <p>Reload the page and verify your account on Instagram before retrying.</p>}
+      <button type="button" onClick={onReset}>Back to start</button>
+    </section>
+  );
+}
+
+function errorTitle(error: InstagramError): string {
+  switch (error.kind) {
+    case 'checkpoint':   return 'Instagram requires you to verify this account';
+    case 'rate_limit':   return 'Rate-limited by Instagram';
+    case 'csrf_expired': return 'Your Instagram session expired';
+    case 'network':      return 'Network error';
+    case 'unknown':      return 'Unexpected response from Instagram';
+  }
+}
+
+function errorDetail(error: InstagramError): string {
+  switch (error.kind) {
+    case 'checkpoint':
+      return 'The scan was stopped to avoid making things worse. Open Instagram in a normal tab, resolve the checkpoint, then come back.';
+    case 'rate_limit':
+      return 'Too many requests have been made. The circuit breaker tripped to protect your account.';
+    case 'csrf_expired':
+      return 'Instagram rotated your session token. Refresh the page and log back in.';
+    case 'network':
+      return 'Could not reach Instagram. Check your connection and try again.';
+    case 'unknown':
+      return `Status ${error.status}. See the developer console for the raw response.`;
+  }
 }
 
 type ToastState = { readonly show: false } | { readonly show: true; readonly text: string };
@@ -194,49 +231,58 @@ function errorDetail(error: InstagramError): string {
 
 
 function App() {
-  const [state, setState] = useState<State>({
-    ...(
-      isLocalPreview && new URLSearchParams(location.search).get("preview") === "scanning"
-        ? {
-          status: "scanning",
-          page: 1,
-          searchTerm: "",
-          currentTab: "non_whitelisted",
-          percentage: 100,
-          results: _getPreviewUsers(),
-          selectedResults: _getPreviewUsers().slice(0, 3),
-          whitelistedResults: _getPreviewUsers().slice(10, 12),
-          filter: {
-            showNonFollowers: true,
-            showFollowers: false,
-            showVerified: true,
-            showPrivate: true,
-            showWithOutProfilePicture: true,
-          },
-        } as State
-        : { status: "initial" as const }
-    ),
+  const askConfirm = useConfirm();
+
+  const [state, setState] = useState<State>(() => (
+    isLocalPreview && new URLSearchParams(location.search).get("preview") === "scanning"
+      ? {
+        status: "scanning",
+        page: 1,
+        searchTerm: "",
+        currentTab: "non_whitelisted",
+        percentage: 100,
+        results: _getPreviewUsers(),
+        selectedResults: _getPreviewUsers().slice(0, 3),
+        whitelistedResults: _getPreviewUsers().slice(10, 12),
+        paused: false,
+        filter: {
+          showNonFollowers: true,
+          showFollowers: false,
+          showVerified: true,
+          showPrivate: true,
+          showWithOutProfilePicture: true,
+        },
+      }
+      : { status: "initial" }
+  ));
+
+  const [toast, setToast] = useState<ToastState>({ show: false });
+
+  const [timings, setTimings] = useState<Timings>(() => loadTimings() ?? {
+    timeBetweenSearchCycles: DEFAULT_TIME_BETWEEN_SEARCH_CYCLES,
+    timeToWaitAfterFiveSearchCycles: DEFAULT_TIME_TO_WAIT_AFTER_FIVE_SEARCH_CYCLES,
+    timeBetweenUnfollows: DEFAULT_TIME_BETWEEN_UNFOLLOWS,
+    timeToWaitAfterFiveUnfollows: DEFAULT_TIME_TO_WAIT_AFTER_FIVE_UNFOLLOWS,
   });
 
-  const [toast, setToast] = useState<{ readonly show: false } | { readonly show: true; readonly text: string }>({
-    show: false,
-  });
-
-  const [timings, setTimings] = useState<Timings>(() => {
-    const storedTimings = loadTimings();
-    return storedTimings ?? {
-      timeBetweenSearchCycles: DEFAULT_TIME_BETWEEN_SEARCH_CYCLES,
-      timeToWaitAfterFiveSearchCycles: DEFAULT_TIME_TO_WAIT_AFTER_FIVE_SEARCH_CYCLES,
-      timeBetweenUnfollows: DEFAULT_TIME_BETWEEN_UNFOLLOWS,
-      timeToWaitAfterFiveUnfollows: DEFAULT_TIME_TO_WAIT_AFTER_FIVE_UNFOLLOWS,
-    };
-  });
-
-  // Save timings whenever they change
   useEffect(() => {
     saveTimings(timings);
   }, [timings]);
 
+  useScanner({ state, setState, setToast, timings, isLocalPreview });
+  useUnfollower({
+    state,
+    setState,
+    setToast,
+    timings,
+    isLocalPreview,
+    confirm: message => askConfirm({
+      title: 'Resume previous batch?',
+      message,
+      confirmLabel: 'Resume',
+      cancelLabel: 'Discard',
+    }),
+  });
 
   let isActiveProcess: boolean;
   switch (state.status) {
@@ -267,6 +313,7 @@ function App() {
         results: previewUsers,
         selectedResults: previewUsers.slice(0, 3),
         whitelistedResults: previewUsers.slice(10, 12),
+        paused: false,
         filter: {
           showNonFollowers: true,
           showFollowers: false,
@@ -287,6 +334,7 @@ function App() {
       results: [],
       selectedResults: [],
       whitelistedResults,
+      paused: false,
       filter: {
         showNonFollowers: true,
         showFollowers: false,
@@ -297,28 +345,33 @@ function App() {
     });
   };
 
-  const handleScanFilter = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleScanFilter = async (e: ChangeEvent<HTMLInputElement>) => {
     if (state.status !== "scanning") {
       return;
     }
+    const fieldName = e.currentTarget.name;
+    const checked = e.currentTarget.checked;
     if (state.selectedResults.length > 0) {
-      if (!confirm("Changing filter options will clear selected users")) {
-        // Force re-render. Bit of a hack but had an issue where the checkbox state was still
-        // changing in the UI even even when not confirming. So updating the state fixes this
-        // by synchronizing the checkboxes with the filter statuses in the state.
+      const ok = await askConfirm({
+        title: 'Change filter?',
+        message: 'Changing filter options will clear selected users.',
+        confirmLabel: 'Change filter',
+      });
+      if (!ok) {
+        // Force re-render so the checkbox UI snaps back to the underlying filter state.
         setState({ ...state });
         return;
       }
     }
-    setState({
-      ...state,
-      // Make sure to clear selected results when changing filter options. This is to avoid having
-      // users selected in the unfollow queue but not visible in the UI, which would be confusing.
-      selectedResults: [],
-      filter: {
-        ...state.filter,
-        [e.currentTarget.name]: e.currentTarget.checked,
-      },
+    setState(prev => {
+      if (prev.status !== 'scanning') {
+        return prev;
+      }
+      return {
+        ...prev,
+        selectedResults: [],
+        filter: { ...prev.filter, [fieldName]: checked },
+      };
     });
   };
 
@@ -375,7 +428,6 @@ function App() {
     }
   };
 
-  // it will work the same as toggleAllUsers, but it will select everyone on the current page.
   const toggleCurrentePageUsers = (e: ChangeEvent<HTMLInputElement>) => {
     if (state.status !== "scanning") {
       return;
@@ -412,26 +464,21 @@ function App() {
     }
   };
 
+  const togglePause = () => {
+    setState(prev => prev.status === 'scanning' ? { ...prev, paused: !prev.paused } : prev);
+  };
+
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Prompt user if he tries to leave while in the middle of a process (searching / unfollowing / etc..)
-      // This is especially good for avoiding accidental tab closing which would result in a frustrating experience.
       if (!isActiveProcess) {
         return;
       }
-
-      // `e` Might be undefined in older browsers, so silence linter for this one.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       e = e || window.event;
-
-      // `e` Might be undefined in older browsers, so silence linter for this one.
-      // For IE and Firefox prior to version 4
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (e) {
         e.returnValue = "Changes you made may not be saved.";
       }
-
-      // For Safari
       return "Changes you made may not be saved.";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
@@ -594,9 +641,9 @@ function App() {
         state={state}
         handleScanFilter={handleScanFilter}
         toggleUser={toggleUser}
-        pauseScan={pauseScan}
+        pauseScan={togglePause}
         setState={setState}
-        scanningPaused={scanningPaused}
+        scanningPaused={state.paused}
         UserCheckIcon={UserCheckIcon}
         UserUncheckIcon={UserUncheckIcon}
       ></Searching>;
@@ -652,5 +699,10 @@ if (location.hostname !== INSTAGRAM_HOSTNAME && !isLocalPreview) {
 } else {
   document.title = "InstagramUnfollowers";
   document.body.innerHTML = "";
-  render(<App />, document.body);
+  render(
+    <DialogProvider>
+      <App />
+    </DialogProvider>,
+    document.body,
+  );
 }

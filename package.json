@@ -35,6 +35,7 @@
     "webpack-dev-server": "^5.2.0"
   },
   "dependencies": {
+    "idb": "^8.0.3",
     "preact": "^10.25.4"
   }
 }

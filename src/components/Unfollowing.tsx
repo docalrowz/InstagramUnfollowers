@@ -1,5 +1,5 @@
 import React from "react";
-import { getUnfollowLogForDisplay } from "../utils/utils";
+import { getUnfollowLogForDisplay } from "../state/selectors";
 import { State } from "../model/state";
 
 interface UnfollowingProps {
