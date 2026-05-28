@@ -1,6 +1,8 @@
 import React from "react";
 import { getUnfollowLogForDisplay } from "../state/selectors";
 import { State } from "../model/state";
+import { exportUnfollowLogToCSV, exportUnfollowLogToJSON } from "../utils/utils";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface UnfollowingProps {
   state: State;
@@ -13,20 +15,23 @@ export const Unfollowing = (
     state,
     handleUnfollowFilter,
   }: UnfollowingProps) => {
+  const { t } = useTranslation();
 
   if (state.status !== "unfollowing") {
     return null;
   }
 
+  const hasEntries = state.unfollowLog.length > 0;
+
   return (
     <section className="workspace-layout">
       <aside className="app-sidebar">
         <div className="panel-heading">
-          <span>Unfollow Queue</span>
+          <span>{t.workspace.unfollowQueue}</span>
           <strong>{state.percentage}%</strong>
         </div>
         <menu className="flex column grow m-clear p-clear">
-          <p>Filter</p>
+          <p>{t.workspace.filter}</p>
           <label className="badge m-small">
             <input
               type="checkbox"
@@ -34,7 +39,7 @@ export const Unfollowing = (
               checked={state.filter.showSucceeded}
               onChange={handleUnfollowFilter}
             />
-            &nbsp;Succeeded
+            &nbsp;{t.workspace.succeeded}
           </label>
           <label className="badge m-small">
             <input
@@ -43,9 +48,27 @@ export const Unfollowing = (
               checked={state.filter.showFailed}
               onChange={handleUnfollowFilter}
             />
-            &nbsp;Failed
+            &nbsp;{t.workspace.failed}
           </label>
         </menu>
+        <div className="sidebar-buttons-grid">
+          <button
+            className="button-secondary"
+            type="button"
+            disabled={!hasEntries}
+            onClick={() => exportUnfollowLogToJSON(state.unfollowLog)}
+          >
+            JSON
+          </button>
+          <button
+            className="button-secondary"
+            type="button"
+            disabled={!hasEntries}
+            onClick={() => exportUnfollowLogToCSV(state.unfollowLog)}
+          >
+            CSV
+          </button>
+        </div>
       </aside>
       <article className="unfollow-log-container">
         {state.unfollowLog.length === 0 && (
@@ -56,14 +79,14 @@ export const Unfollowing = (
                 <path d="M12 7v5l3 2" />
               </svg>
             </div>
-            <h3>Queue starting</h3>
-            <p>Waiting for the first unfollow to land. Entries will stream in here as each request completes.</p>
+            <h3>{t.states.queueStarting}</h3>
+            <p>{t.states.queueStartingDescription}</p>
           </div>
         )}
         {state.unfollowLog.length > 0 && state.unfollowLog.length === state.selectedResults.length && (
           <>
             <hr />
-            <div className="fs-large p-medium clr-green">All done</div>
+            <div className="fs-large p-medium clr-green">{t.workspace.allDone}</div>
             <hr />
           </>
         )}

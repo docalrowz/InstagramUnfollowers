@@ -57,6 +57,70 @@ html .iu {
     --header-h: 3.5rem;
 }
 
+// Light mode — invert zinc surfaces, keep accent.
+html[data-theme='light'] .iu {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-raised: #f4f4f5;
+    --surface-hover: #e4e4e7;
+    --surface-active: #d4d4d8;
+
+    --line: rgba(9, 9, 11, 0.08);
+    --line-strong: rgba(9, 9, 11, 0.14);
+    --line-active: rgba(9, 9, 11, 0.22);
+
+    --text: #09090b;
+    --text-secondary: #27272a;
+    --text-muted: #52525b;
+    --text-faint: #71717a;
+
+    --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 8px 24px rgba(9, 9, 11, 0.06);
+    --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 12px 36px rgba(9, 9, 11, 0.1);
+}
+
+html[data-theme='light'],
+html[data-theme='light'] body {
+    background: #fafafa !important;
+}
+
+html[data-theme='light'] .iu {
+    background:
+        radial-gradient(1200px 800px at 12% -10%, rgba(37, 99, 235, 0.05), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(9, 9, 11, 0.02), transparent 65%),
+        var(--bg);
+}
+
+html[data-theme='light'] .iu::before {
+    opacity: 0.015;
+    mix-blend-mode: multiply;
+}
+
+// In light mode, the white "primary" button (CTA) should invert to dark.
+html[data-theme='light'] .iu button.run-scan,
+html[data-theme='light'] .iu .btn-container .btn[type='submit'],
+html[data-theme='light'] .iu .dialog .dialog-confirm,
+html[data-theme='light'] .error-screen button {
+    background: #09090b !important;
+    border-color: #09090b !important;
+    color: #fafafa !important;
+}
+
+html[data-theme='light'] .iu button.run-scan:hover,
+html[data-theme='light'] .iu .btn-container .btn[type='submit']:hover,
+html[data-theme='light'] .iu .dialog .dialog-confirm:hover,
+html[data-theme='light'] .error-screen button:hover {
+    background: #18181b !important;
+    border-color: #18181b !important;
+}
+
+html[data-theme='light'] .iu .app-header {
+    background: rgba(250, 250, 250, 0.72);
+}
+
+html[data-theme='light'] .iu .tabs-container {
+    background: rgba(250, 250, 250, 0.72);
+}
+
 // -------- Body / app shell --------
 html,
 body {
@@ -250,7 +314,41 @@ html .iu .icon-button svg {
     width: 1rem;
     height: 1rem;
     fill: var(--text-secondary);
-    transition: fill 0.18s var(--ease-snap);
+    color: var(--text-secondary);
+    transition: fill 0.18s var(--ease-snap), color 0.18s var(--ease-snap);
+}
+
+html .iu .locale-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.25rem;
+    min-width: 2.6rem;
+    padding: 0 0.7rem;
+    border: 1px solid var(--line-strong) !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    color: var(--text-secondary) !important;
+    font-family: var(--font-mono);
+    font-size: 0.74rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.18s var(--ease-snap), border-color 0.18s var(--ease-snap), color 0.18s var(--ease-snap);
+}
+
+html .iu .locale-toggle:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: var(--line-active) !important;
+    color: var(--text) !important;
+}
+
+html[data-theme='light'] .iu .locale-toggle {
+    background: rgba(9, 9, 11, 0.02) !important;
+}
+
+html[data-theme='light'] .iu .locale-toggle:hover {
+    background: rgba(9, 9, 11, 0.06) !important;
 }
 
 html .iu .icon-button:hover:not(:disabled) svg {
@@ -1840,5 +1938,72 @@ html .iu .skeleton-line {
 
     html .iu .summary-grid {
         grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    // Sidebar becomes a scrollable top section; the unfollow CTA stays
+    // pinned to the bottom of the viewport so the action remains
+    // reachable while results scroll.
+    html .iu .app-sidebar {
+        position: relative;
+        height: auto;
+        padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0));
+    }
+
+    html .iu button.unfollow {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 6;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        padding: 1rem 1.1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0)) !important;
+        box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.42) !important;
+    }
+
+    html .iu .results-container,
+    html .iu .unfollow-log-container {
+        padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0)) !important;
+    }
+
+    // Horizontal tab strip — let it scroll instead of breaking onto two
+    // rows when the tab labels are wider than the screen.
+    html .iu .tabs-container {
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    html .iu .tabs-container::-webkit-scrollbar {
+        display: none;
+    }
+
+    html .iu .tabs-container .tab {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    // Toolbar action chips stay on one row, scroll horizontally if it
+    // overflows so the search bar never gets pushed off-screen.
+    html .iu .toolbar-actions {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    html .iu .toolbar-actions::-webkit-scrollbar {
+        display: none;
+    }
+
+    html .iu .toolbar-actions > * {
+        flex: 0 0 auto;
+    }
+
+    // Landing — tighten side padding so cards don't slide under the
+    // viewport edge on the smallest phones.
+    html .iu .launch-screen {
+        padding: 5.5rem 1rem 2.5rem;
     }
 }

@@ -23,6 +23,8 @@ import { Unfollowing } from './components/Unfollowing';
 import { Timings } from './model/timings';
 import { loadWhitelist, saveWhitelist, loadTimings, saveTimings } from './utils/whitelist-manager';
 import { DialogProvider, useConfirm } from './components/ui/ConfirmDialog';
+import { TranslationProvider } from './i18n/TranslationProvider';
+import { ThemeProvider } from './theme/ThemeProvider';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { InstagramError } from './core/error-types';
 import { errorDetail, errorTitle } from './state/error-messages';
@@ -300,7 +302,7 @@ function App() {
     }
   };
 
-  const toggleCurrentePageUsers = (e: ChangeEvent<HTMLInputElement>) => {
+  const toggleCurrentPageUsers = (e: ChangeEvent<HTMLInputElement>) => {
     if (state.status !== 'scanning') {
       return;
     }
@@ -402,7 +404,7 @@ function App() {
           setState={setState}
           isActiveProcess={isActiveProcess}
           toggleAllUsers={toggleAllUsers}
-          toggleCurrentePageUsers={toggleCurrentePageUsers}
+          toggleCurrentPageUsers={toggleCurrentPageUsers}
           setTimings={setTimings}
           currentTimings={timings}
           whitelistedUsers={whitelist}
@@ -436,9 +438,13 @@ if (location.hostname !== INSTAGRAM_HOSTNAME && !isLocalPreview) {
   document.body.appendChild(root);
   render(
     <ErrorBoundary>
-      <DialogProvider>
-        <App />
-      </DialogProvider>
+      <ThemeProvider>
+        <TranslationProvider>
+          <DialogProvider>
+            <App />
+          </DialogProvider>
+        </TranslationProvider>
+      </ThemeProvider>
     </ErrorBoundary>,
     root,
   );
