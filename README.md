@@ -3,11 +3,10 @@
 [![CI](https://github.com/davidarroyo1234/InstagramUnfollowers/actions/workflows/ci.yaml/badge.svg)](https://github.com/davidarroyo1234/InstagramUnfollowers/actions/workflows/ci.yaml)
 [![Maintenance](https://img.shields.io/maintenance/yes/2026)](https://github.com/davidarroyo1234/InstagramUnfollowers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdocalrowz%2FIGUnfollowers)
 
 A browser-based tool that shows you who doesn't follow you back on Instagram and lets you bulk-unfollow them. No download, no install, no server — paste a script into the developer console on instagram.com and you're done.
 
-**Live:** <https://igunfollowers.vercel.app/>
+**Live:** <https://igunfollow.vercel.app/>
 
 ## ⚠️ Read this first
 

@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /preview.html
 
-Sitemap: https://igunfollowers.vercel.app/sitemap.xml
+Sitemap: https://igunfollow.vercel.app/sitemap.xml
