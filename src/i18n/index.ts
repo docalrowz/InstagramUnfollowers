@@ -1,7 +1,7 @@
 import { dictionaries, Locale, Translation } from './dictionaries';
 
 const LOCALE_STORAGE_KEY = 'iu_locale';
-const SUPPORTED: readonly Locale[] = ['en', 'fr'];
+const SUPPORTED: readonly Locale[] = ['en', 'fr', 'es', 'pt', 'de', 'ja'];
 
 function isLocale(value: string): value is Locale {
   return (SUPPORTED as readonly string[]).includes(value);
