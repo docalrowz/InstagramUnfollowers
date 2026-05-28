@@ -7,7 +7,12 @@ import {
   saveTimings,
   saveWhitelist,
 } from './whitelist-manager';
-import { TIMINGS_STORAGE_KEY, WHITELISTED_RESULTS_STORAGE_KEY } from '../constants/constants';
+import {
+  LEGACY_TIMINGS_STORAGE_KEY,
+  LEGACY_WHITELISTED_RESULTS_STORAGE_KEY,
+  TIMINGS_STORAGE_KEY,
+  WHITELISTED_RESULTS_STORAGE_KEY,
+} from '../constants/constants';
 import { Typename, UserNode } from '../model/user';
 import { Timings } from '../model/timings';
 
@@ -85,10 +90,32 @@ describe('whitelist persistence', () => {
     setItem.mockRestore();
   });
 
-  it('clearWhitelist removes the key', () => {
+  it('clearWhitelist removes both v1 and legacy keys', () => {
     saveWhitelist([user('1')]);
+    localStorage.setItem(LEGACY_WHITELISTED_RESULTS_STORAGE_KEY, JSON.stringify([user('legacy')]));
     clearWhitelist();
     expect(localStorage.getItem(WHITELISTED_RESULTS_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(LEGACY_WHITELISTED_RESULTS_STORAGE_KEY)).toBeNull();
+  });
+});
+
+describe('whitelist legacy migration', () => {
+  it('migrates legacy key to v1 on first load', () => {
+    localStorage.setItem(
+      LEGACY_WHITELISTED_RESULTS_STORAGE_KEY,
+      JSON.stringify([user('1'), user('2')]),
+    );
+    const out = loadWhitelist();
+    expect(out.map(u => u.id)).toEqual(['1', '2']);
+    expect(localStorage.getItem(LEGACY_WHITELISTED_RESULTS_STORAGE_KEY)).toBeNull();
+    expect(JSON.parse(localStorage.getItem(WHITELISTED_RESULTS_STORAGE_KEY) ?? '[]')).toHaveLength(2);
+  });
+
+  it('prefers v1 when both keys exist', () => {
+    saveWhitelist([user('new')]);
+    localStorage.setItem(LEGACY_WHITELISTED_RESULTS_STORAGE_KEY, JSON.stringify([user('old')]));
+    expect(loadWhitelist().map(u => u.id)).toEqual(['new']);
+    expect(localStorage.getItem(LEGACY_WHITELISTED_RESULTS_STORAGE_KEY)).not.toBeNull();
   });
 });
 
@@ -118,6 +145,13 @@ describe('timings persistence', () => {
   it('loadTimings returns null on corrupt JSON', () => {
     localStorage.setItem(TIMINGS_STORAGE_KEY, '{not valid');
     expect(loadTimings()).toBeNull();
+  });
+
+  it('migrates legacy timings key to v1', () => {
+    localStorage.setItem(LEGACY_TIMINGS_STORAGE_KEY, JSON.stringify(timings));
+    expect(loadTimings()).toEqual(timings);
+    expect(localStorage.getItem(LEGACY_TIMINGS_STORAGE_KEY)).toBeNull();
+    expect(JSON.parse(localStorage.getItem(TIMINGS_STORAGE_KEY) ?? 'null')).toEqual(timings);
   });
 
   it('saveTimings swallows storage errors', () => {
