@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface NotSearchingProps {
   onScan?: () => void;
@@ -11,41 +12,42 @@ const ArrowIcon = () => (
   </svg>
 );
 
-export const NotSearching = ({ onScan }: NotSearchingProps) => (
-  <section className="launch-screen">
-    <div className="launch-copy">
-      <span className="eyebrow">Local account audit</span>
-      <h1>Find the follows that do not follow back.</h1>
-      <p>
-        Scan your Instagram follows, surface risk signals, protect whitelisted accounts,
-        and act only on the users you select. Everything runs in this browser session.
-      </p>
-      <div className="launch-actions">
-        <button className="run-scan" onClick={onScan} type="button">
-          Run scan
-          <ArrowIcon />
-        </button>
-        <span className="launch-note">No servers · no auth · no exfiltration</span>
+export const NotSearching = ({ onScan }: NotSearchingProps) => {
+  const { t } = useTranslation();
+  const copy = t.landing;
+  return (
+    <section className="launch-screen">
+      <div className="launch-copy">
+        <span className="eyebrow">{copy.eyebrow}</span>
+        <h1>{copy.headline}</h1>
+        <p>{copy.lede}</p>
+        <div className="launch-actions">
+          <button className="run-scan" onClick={onScan} type="button">
+            {copy.cta}
+            <ArrowIcon />
+          </button>
+          <span className="launch-note">{copy.note}</span>
+        </div>
       </div>
-    </div>
-    <div className="launch-panel" aria-hidden="true">
-      <div className="scan-orbit">
-        <span />
-        <span />
-        <span />
+      <div className="launch-panel" aria-hidden="true">
+        <div className="scan-orbit">
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="signal-card primary">
+          <span>{copy.statusLabel}</span>
+          <strong>{copy.statusValue}</strong>
+        </div>
+        <div className="signal-card">
+          <span>{copy.whitelistLabel}</span>
+          <strong>{copy.whitelistValue}</strong>
+        </div>
+        <div className="signal-card accent">
+          <span>{copy.nextStepLabel}</span>
+          <strong>{copy.nextStepValue}</strong>
+        </div>
       </div>
-      <div className="signal-card primary">
-        <span>Status</span>
-        <strong>Idle</strong>
-      </div>
-      <div className="signal-card">
-        <span>Whitelist</span>
-        <strong>Protected</strong>
-      </div>
-      <div className="signal-card accent">
-        <span>Next step</span>
-        <strong>Run scan</strong>
-      </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};

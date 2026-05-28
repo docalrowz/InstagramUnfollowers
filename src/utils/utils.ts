@@ -1,4 +1,5 @@
 import { UserNode } from '../model/user';
+import { UnfollowLogEntry } from '../model/unfollow-log-entry';
 
 export async function copyListToClipboard(nonFollowersList: readonly UserNode[]): Promise<void> {
   const sortedList = [...nonFollowersList].sort((a, b) => (a.username > b.username ? 1 : -1));
@@ -14,6 +15,39 @@ export function exportToJSON(users: readonly UserNode[]) {
   document.body.appendChild(downloadAnchorNode);
   downloadAnchorNode.click();
   downloadAnchorNode.remove();
+}
+
+function downloadDataUri(uri: string, filename: string): void {
+  const link = document.createElement('a');
+  link.setAttribute('href', uri);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+export function exportUnfollowLogToJSON(entries: readonly UnfollowLogEntry[]): void {
+  const payload = entries.map(entry => ({
+    username: entry.user.username,
+    full_name: entry.user.full_name,
+    id: entry.user.id,
+    unfollowed_successfully: entry.unfollowedSuccessfully,
+  }));
+  const uri = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+  downloadDataUri(uri, 'instagram_unfollow_log.json');
+}
+
+export function exportUnfollowLogToCSV(entries: readonly UnfollowLogEntry[]): void {
+  const headers = ['username', 'full_name', 'id', 'unfollowed_successfully'];
+  const rows = entries.map(entry => [
+    entry.user.username,
+    `"${entry.user.full_name.replace(/"/g, '""')}"`,
+    entry.user.id,
+    entry.unfollowedSuccessfully ? 'true' : 'false',
+  ]);
+  const csv = headers.join(',') + '\n' + rows.map(row => row.join(',')).join('\n');
+  const uri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  downloadDataUri(uri, 'instagram_unfollow_log.csv');
 }
 
 export function exportToCSV(users: readonly UserNode[]) {
