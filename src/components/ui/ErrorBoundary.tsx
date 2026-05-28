@@ -15,6 +15,11 @@ interface ErrorBoundaryState {
 
 interface ErrorBoundaryProps {
   readonly children: React.ReactNode;
+  /**
+   * Hook for structured logging (Sentry, console, custom). Called on
+   * every caught render error. Defaults to console.error.
+   */
+  readonly onError?: (error: Error, componentStack?: string) => void;
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -25,7 +30,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, info: { readonly componentStack?: string }) {
-    console.error('[InstagramUnfollowers] crashed:', error, info.componentStack);
+    const handler = this.props.onError ?? defaultLogger;
+    handler(error, info.componentStack);
   }
 
   render() {
@@ -59,4 +65,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       </section>
     );
   }
+}
+
+function defaultLogger(error: Error, componentStack?: string): void {
+  console.error('[InstagramUnfollowers] crashed:', error, componentStack);
 }
