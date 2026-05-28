@@ -23,8 +23,25 @@ describe('i18n locale resolution', () => {
 
   it('defaults to English when navigator advertises an unsupported locale', () => {
     vi.spyOn(globalThis.navigator, 'languages', 'get').mockReturnValue([]);
-    vi.spyOn(globalThis.navigator, 'language', 'get').mockReturnValue('de-DE');
+    vi.spyOn(globalThis.navigator, 'language', 'get').mockReturnValue('zh-CN');
     expect(loadLocale()).toBe('en');
+  });
+
+  it('detects each supported locale from navigator', () => {
+    const cases: Array<[string, 'en' | 'fr' | 'es' | 'pt' | 'de' | 'ja']> = [
+      ['en-US', 'en'],
+      ['fr-FR', 'fr'],
+      ['es-ES', 'es'],
+      ['pt-BR', 'pt'],
+      ['de-DE', 'de'],
+      ['ja-JP', 'ja'],
+    ];
+    for (const [advertised, expected] of cases) {
+      localStorage.clear();
+      vi.spyOn(globalThis.navigator, 'languages', 'get').mockReturnValue([]);
+      vi.spyOn(globalThis.navigator, 'language', 'get').mockReturnValue(advertised);
+      expect(loadLocale()).toBe(expected);
+    }
   });
 
   it('ignores invalid locale strings written by hand into storage', () => {
@@ -46,17 +63,19 @@ describe('i18n locale resolution', () => {
 });
 
 describe('i18n dictionary parity', () => {
-  it('every key present in English exists in French (and vice versa)', () => {
-    const flatten = (obj: object, prefix = ''): string[] =>
-      Object.entries(obj).flatMap(([key, value]) => {
-        const path = prefix === '' ? key : `${prefix}.${key}`;
-        return typeof value === 'object' && value !== null
-          ? flatten(value as object, path)
-          : [path];
-      });
+  const flatten = (obj: object, prefix = ''): string[] =>
+    Object.entries(obj).flatMap(([key, value]) => {
+      const path = prefix === '' ? key : `${prefix}.${key}`;
+      return typeof value === 'object' && value !== null
+        ? flatten(value as object, path)
+        : [path];
+    });
 
+  it('every locale exposes the same key set as English', () => {
     const enKeys = flatten(dictionaries.en).sort();
-    const frKeys = flatten(dictionaries.fr).sort();
-    expect(enKeys).toEqual(frKeys);
+    for (const locale of Object.keys(dictionaries) as Array<keyof typeof dictionaries>) {
+      const keys = flatten(dictionaries[locale]).sort();
+      expect(keys, `locale=${locale}`).toEqual(enKeys);
+    }
   });
 });
