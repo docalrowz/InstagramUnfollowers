@@ -1,12 +1,13 @@
-import { Dispatch, SetStateAction, useEffect } from "react";
-import { State } from "../model/state";
-import { Timings } from "../model/timings";
-import { UserNode } from "../model/user";
-import { AdaptiveRateLimiter } from "../core/rate-limiter";
-import { CircuitBreaker } from "../core/circuit-breaker";
-import { fetchFollowingPage } from "../core/instagram-api";
-import { sleep } from "../utils/utils";
-import { handleApiError, ToastState } from "./api-error-handler";
+import { Dispatch, SetStateAction, useEffect, useRef } from 'react';
+import { State } from '../model/state';
+import { Timings } from '../model/timings';
+import { UserNode } from '../model/user';
+import { AdaptiveRateLimiter } from '../core/rate-limiter';
+import { CircuitBreaker } from '../core/circuit-breaker';
+import { fetchFollowingPage } from '../core/instagram-api';
+import { awaitQueryHash } from '../core/query-hash';
+import { sleep } from '../utils/utils';
+import { handleApiError, ToastState } from './api-error-handler';
 
 interface UseScannerArgs {
   readonly state: State;
@@ -21,8 +22,9 @@ interface UseScannerArgs {
  *
  * Owns the per-session AdaptiveRateLimiter and CircuitBreaker (fresh
  * instances per scan so a previous bad session does not poison the
- * next one). Reads `state.paused` on each iteration so the user can
- * pause/resume without remounting.
+ * next one). Reads `state.paused` from a ref synced every render —
+ * the scan closure captures the value at start of effect, so we need
+ * a live channel into the latest state.
  */
 export function useScanner({
   state,
@@ -31,11 +33,21 @@ export function useScanner({
   timings,
   isLocalPreview,
 }: UseScannerArgs): void {
+  const pausedRef = useRef(false);
+  useEffect(() => {
+    pausedRef.current = state.status === 'scanning' ? state.paused : false;
+  });
+
   useEffect(() => {
     const scan = async () => {
-      if (state.status !== "scanning" || isLocalPreview) {
+      if (state.status !== 'scanning' || isLocalPreview) {
         return;
       }
+      // Probe-seed: wait briefly for Instagram to make a natural
+      // graphql/query so we pick up a live query_hash before falling
+      // back to the hardcoded one.
+      await awaitQueryHash();
+
       const limiter = new AdaptiveRateLimiter({
         baseDelay: timings.timeBetweenSearchCycles,
         jitterRatio: 0.2,
@@ -64,7 +76,7 @@ export function useScanner({
           page.users.forEach(u => results.push(u));
 
           setState(prevState => {
-            if (prevState.status !== "scanning") {
+            if (prevState.status !== 'scanning') {
               return prevState;
             }
             return {
@@ -74,16 +86,14 @@ export function useScanner({
             };
           });
         } catch (e) {
-          const handled = await handleApiError(e, limiter, breaker, "scanning", setState, setToast);
-          if (handled === "halt") {
+          const handled = await handleApiError(e, limiter, breaker, 'scanning', setState, setToast);
+          if (handled === 'halt') {
             return;
           }
           continue;
         }
 
-        // Pause loop reads from the latest state via the setState reducer pattern
-        // so toggling pause from the UI is observed immediately on the next tick.
-        while (isPaused(setState)) {
+        while (pausedRef.current) {
           await sleep(1000);
         }
 
@@ -104,28 +114,11 @@ export function useScanner({
         }
         setToast({ show: false });
       }
-      setToast({ show: true, text: "Scanning completed!" });
+      setToast({ show: true, text: 'Scanning completed!' });
     };
-    scan();
+    void scan();
     // Same intentional deps as the original effect: re-firing on every
     // `timings` change would restart the scan from scratch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status]);
-}
-
-/**
- * Reads the current `paused` flag straight off the latest state by
- * running setState through an identity reducer. Pattern used because
- * the long-running scan closure captures the state from the initial
- * render and would otherwise see a stale `paused` value forever.
- */
-function isPaused(setState: Dispatch<SetStateAction<State>>): boolean {
-  let paused = false;
-  setState(prev => {
-    if (prev.status === 'scanning') {
-      paused = prev.paused;
-    }
-    return prev;
-  });
-  return paused;
 }
