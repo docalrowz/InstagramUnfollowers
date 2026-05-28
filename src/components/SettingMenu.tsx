@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { ChangeEvent, FormEvent, useState } from 'react';
 import { Timings } from '../model/timings';
 import { UserNode } from '../model/user';
 import { WhitelistManager } from './WhitelistManager';
@@ -23,7 +23,7 @@ export const SettingMenu = ({
   const [timeBetweenUnfollows, setTimeBetweenUnfollows] = useState(currentTimings.timeBetweenUnfollows);
   const [timeToWaitAfterFiveUnfollows, setTimeToWaitAfterFiveUnfollows] = useState(currentTimings.timeToWaitAfterFiveUnfollows);
 
-  const handleSave = (event: any) => {
+  const handleSave = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setTimings({
       timeBetweenSearchCycles,
@@ -34,10 +34,8 @@ export const SettingMenu = ({
     setSettingState(false);
   };
 
-  // @ts-ignore
-  const handleInputChange = (event: any, setter: (value: number) => void) => {
-
-    const value = Number(event?.target?.value);
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>, setter: (value: number) => void) => {
+    const value = Number(event.currentTarget.value);
     setter(value);
   };
 
