@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.{ts,tsx}\""
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "analyze": "webpack --mode production --profile --json > dist/stats.json && echo Upload dist/stats.json to https://chrisbateman.github.io/webpack-visualizer/ or run: npx webpack-bundle-analyzer dist/stats.json"
   },
   "babel": {
     "plugins": [
@@ -30,9 +31,10 @@
     "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^4.6.2",
+    "fake-indexeddb": "^6.2.5",
     "happy-dom": "^14.12.3",
     "sass": "^1.83.4",
-    "sass-loader": "^13.3.3",
+    "sass-loader": "^14.2.1",
     "style-loader": "^3.3.4",
     "ts-loader": "^9.5.2",
     "typescript": "^5.7.3",
